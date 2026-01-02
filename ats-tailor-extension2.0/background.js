@@ -77,7 +77,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // Handle Workday credentials update
+// Handle Workday credentials update
   if (message.action === 'UPDATE_WORKDAY_CREDENTIALS') {
     chrome.storage.local.set({
       workday_email: message.email,
@@ -85,6 +85,44 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       workday_verify_password: message.verifyPassword || message.password
     });
     sendResponse({ status: 'updated' });
+    return true;
+  }
+  
+  // Handle TRIGGER_EXTRACT_APPLY from content script - forward to popup or queue
+  if (message.action === 'TRIGGER_EXTRACT_APPLY') {
+    console.log('[ATS Tailor Background] Received TRIGGER_EXTRACT_APPLY, forwarding to popup');
+    
+    // Set badge to show automation is running
+    chrome.action.setBadgeText({ text: '⚡' });
+    chrome.action.setBadgeBackgroundColor({ color: '#f59e0b' });
+    
+    // Store the pending trigger so popup can pick it up when opened
+    chrome.storage.local.set({
+      pending_extract_apply: {
+        jobInfo: message.jobInfo,
+        timestamp: Date.now(),
+        triggeredFromAutomation: true
+      }
+    });
+    
+    // Try to send to popup (may fail if popup not open)
+    chrome.runtime.sendMessage({
+      action: 'POPUP_TRIGGER_EXTRACT_APPLY',
+      jobInfo: message.jobInfo
+    }).catch(() => {
+      console.log('[ATS Tailor Background] Popup not open, stored pending trigger');
+    });
+    
+    sendResponse({ status: 'queued' });
+    return true;
+  }
+  
+  // Handle completion from popup to clear badge
+  if (message.action === 'EXTRACT_APPLY_COMPLETE') {
+    chrome.action.setBadgeText({ text: '✓' });
+    chrome.action.setBadgeBackgroundColor({ color: '#22c55e' });
+    setTimeout(() => chrome.action.setBadgeText({ text: '' }), 3000);
+    sendResponse({ status: 'acknowledged' });
     return true;
   }
 });
