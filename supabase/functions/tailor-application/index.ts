@@ -1164,6 +1164,127 @@ ${includeReferral ? `
         return summary.substring(0, 700).trim();
       };
 
+      // Extract tailored work experience bullets from the AI-generated resume text
+      // This ensures the PDF contains the tailored text, not the original profile bullets
+      const extractTailoredExperience = (resumeText: string, originalExperience: any[]): any[] => {
+        if (!resumeText || !originalExperience?.length) {
+          return originalExperience || [];
+        }
+        
+        // Find the EXPERIENCE section in the tailored resume
+        const expMatch = resumeText.match(/\b(WORK\s+EXPERIENCE|EXPERIENCE|PROFESSIONAL\s+EXPERIENCE|EMPLOYMENT\s+HISTORY)\b\s*:?\s*([\s\S]*?)(?=\n\s*(EDUCATION|SKILLS|CERTIFICATIONS|ACHIEVEMENTS|PROJECTS)\b|$)/i);
+        
+        if (!expMatch) {
+          console.log('[PDF] Could not find EXPERIENCE section in tailored resume, using structured AI response if available');
+          // Try to use the structured experience from AI response
+          if (result.resumeStructured?.experience?.length) {
+            return result.resumeStructured.experience.map((exp: any) => ({
+              company: exp.company || "",
+              title: exp.title || "",
+              dates: exp.dates || "",
+              bullets: Array.isArray(exp.bullets) ? exp.bullets : [],
+            }));
+          }
+          return originalExperience;
+        }
+        
+        const expSection = expMatch[2];
+        const tailoredExperiences: any[] = [];
+        
+        // Parse each job entry from the tailored resume
+        // Look for company name patterns (usually bold or on its own line followed by title)
+        const lines = expSection.split('\n').map(l => l.trim()).filter(Boolean);
+        
+        let currentExp: any = null;
+        
+        for (const line of lines) {
+          // Check if this line is a company/title header (contains | or dates like "2020 - Present")
+          const isHeaderLine = /\d{4}\s*[-–—]\s*(\d{4}|Present|Current)/i.test(line) ||
+                              (/\|/.test(line) && line.length < 100);
+          
+          // Check if this is a bullet point
+          const isBullet = /^[-•*]\s*/.test(line) || /^[0-9]+\.\s*/.test(line);
+          
+          if (isHeaderLine && !isBullet) {
+            // Save previous experience if exists
+            if (currentExp && currentExp.bullets.length > 0) {
+              tailoredExperiences.push(currentExp);
+            }
+            
+            // Parse the header - try to extract company, title, dates
+            // Common formats: "Company Name | Title | Dates" or "Company | Dates" then title on next line
+            const parts = line.split(/\s*\|\s*/);
+            const dateMatch = line.match(/(\d{4}\s*[-–—]\s*(?:\d{4}|Present|Current))/i);
+            
+            currentExp = {
+              company: parts[0] || line,
+              title: parts.length > 2 ? parts[1] : "",
+              dates: dateMatch ? dateMatch[1] : (parts[parts.length - 1] || ""),
+              bullets: [],
+            };
+          } else if (isBullet && currentExp) {
+            // Add bullet to current experience
+            const bulletText = line.replace(/^[-•*]\s*/, '').replace(/^[0-9]+\.\s*/, '').trim();
+            if (bulletText.length > 10) {
+              currentExp.bullets.push(bulletText);
+            }
+          } else if (currentExp && !isBullet && line.length > 20 && !isHeaderLine) {
+            // This might be a title line after company name, or a continuation
+            if (!currentExp.title) {
+              currentExp.title = line;
+            }
+          }
+        }
+        
+        // Don't forget the last experience
+        if (currentExp && currentExp.bullets.length > 0) {
+          tailoredExperiences.push(currentExp);
+        }
+        
+        // If parsing failed or got incomplete results, merge with original for company/title/dates
+        if (tailoredExperiences.length > 0 && originalExperience.length > 0) {
+          // Match tailored bullets to original experiences by company name
+          return originalExperience.map((origExp: any, idx: number) => {
+            const tailored = tailoredExperiences.find(t => 
+              t.company.toLowerCase().includes((origExp.company || '').toLowerCase().substring(0, 10)) ||
+              (origExp.company || '').toLowerCase().includes(t.company.toLowerCase().substring(0, 10))
+            ) || tailoredExperiences[idx];
+            
+            return {
+              company: origExp.company || tailored?.company || "",
+              title: origExp.title || tailored?.title || "",
+              dates: origExp.dates || `${origExp.startDate || origExp.start_date || ""} – ${origExp.endDate || origExp.end_date || "Present"}`,
+              bullets: tailored?.bullets?.length > 0 
+                ? tailored.bullets 
+                : (Array.isArray(origExp.description) 
+                    ? origExp.description 
+                    : typeof origExp.description === "string" 
+                      ? origExp.description.split("\n").filter((b: string) => b.trim())
+                      : []),
+            };
+          });
+        }
+        
+        // If tailored parsing worked well, use it directly with fallback to original structure
+        if (tailoredExperiences.length > 0) {
+          console.log(`[PDF] Extracted ${tailoredExperiences.length} tailored experiences with ${tailoredExperiences.reduce((sum, e) => sum + e.bullets.length, 0)} total bullets`);
+          return tailoredExperiences;
+        }
+        
+        // Fallback: use original experience structure
+        console.log('[PDF] Using original experience structure as fallback');
+        return originalExperience.map((exp: any) => ({
+          company: exp?.company || "",
+          title: exp?.title || "",
+          dates: exp?.dates || `${exp?.startDate || exp?.start_date || ""} – ${exp?.endDate || exp?.end_date || "Present"}`,
+          bullets: Array.isArray(exp?.description)
+            ? exp.description
+            : typeof exp?.description === "string"
+              ? exp.description.split("\n").filter((b: string) => b.trim())
+              : [],
+        }));
+      };
+
       const skills = Array.isArray(userProfile.skills) ? userProfile.skills : [];
       const primarySkills = Array.isArray(skills)
         ? skills.filter((s: any) => s?.category === "technical" || s?.proficiency === "expert" || s?.proficiency === "advanced")
@@ -1172,10 +1293,17 @@ ${includeReferral ? `
         ? skills.filter((s: any) => s?.category !== "technical" && s?.proficiency !== "expert" && s?.proficiency !== "advanced")
         : [];
 
+      // Extract tailored work experience from the AI-generated resume
+      const tailoredExperience = extractTailoredExperience(result.tailoredResume || "", userProfile.workExperience || []);
+      
+      // Add timestamp to ensure unique PDF on each run
+      const generationTimestamp = Date.now();
+      
       const resumePayload = {
         type: "resume",
         candidateName: candidateNameForFile,
         customFileName: resumeFileName,
+        generationTimestamp, // Ensures file size changes each run
         personalInfo: {
           name: candidateName,
           email: userProfile.email,
@@ -1186,16 +1314,7 @@ ${includeReferral ? `
           portfolio: userProfile.portfolio,
         },
         summary: extractProfessionalSummary(result.tailoredResume || ""),
-        experience: (Array.isArray(userProfile.workExperience) ? userProfile.workExperience : []).map((exp: any) => ({
-          company: exp?.company || "",
-          title: exp?.title || "",
-          dates: exp?.dates || `${exp?.startDate || exp?.start_date || ""} – ${exp?.endDate || exp?.end_date || "Present"}`,
-          bullets: Array.isArray(exp?.description)
-            ? exp.description
-            : typeof exp?.description === "string"
-              ? exp.description.split("\n").filter((b: string) => b.trim())
-              : [],
-        })),
+        experience: tailoredExperience, // USE TAILORED EXPERIENCE BULLETS
         education: (Array.isArray(userProfile.education) ? userProfile.education : []).map((edu: any) => ({
           degree: edu?.degree || "",
           school: edu?.school || edu?.institution || "",
