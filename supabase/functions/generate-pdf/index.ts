@@ -468,7 +468,7 @@ serve(async (req) => {
       yPosition -= LINE_HEIGHT * 2;
 
       // Salutation
-      currentPage.drawText('Dear Hiring Committee,', {
+      currentPage.drawText('Dear Hiring Manager,', {
         x: MARGIN,
         y: yPosition,
         size: 11,

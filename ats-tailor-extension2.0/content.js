@@ -777,7 +777,7 @@
     });
   }
 
-  // ============ STATUS BANNER (RIBBON STYLE) ============
+  // ============ STATUS BANNER (RIBBON STYLE - SIMPLIFIED) ============
   function createStatusBanner(jobTitle = '') {
     if (document.getElementById('ats-auto-banner')) {
       // Update existing banner with job title
@@ -808,24 +808,16 @@
           align-items: center;
           justify-content: center;
           gap: 8px;
-          animation: ats-slide-in 0.4s ease-out, ats-shimmer 3s ease-in-out infinite;
+          animation: ats-slide-in 0.4s ease-out;
         }
         @keyframes ats-slide-in {
           from { transform: translateY(-100%); opacity: 0; }
           to { transform: translateY(0); opacity: 1; }
         }
-        @keyframes ats-shimmer {
-          0%, 100% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-        }
-        #ats-auto-banner .ats-rocket { font-size: 18px; animation: ats-rocket-pulse 1.5s ease-in-out infinite; }
-        @keyframes ats-rocket-pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.15); }
-        }
+        #ats-auto-banner .ats-rocket { font-size: 18px; }
         #ats-auto-banner .ats-brand { font-weight: 700; color: #000; letter-spacing: 0.5px; }
         #ats-auto-banner .ats-status { 
-          margin-left: 12px; 
+          margin-left: 8px; 
           font-weight: 500;
           color: rgba(0,0,0,0.85);
         }
@@ -836,28 +828,12 @@
           background: linear-gradient(90deg, #ff1744 0%, #ff5252 100%); 
           color: #fff; 
         }
-        #ats-auto-banner .ats-timer {
-          margin-left: 8px;
-          font-size: 12px;
-          opacity: 0.8;
-          font-family: monospace;
-        }
       </style>
-      <span class="ats-rocket">⚡</span>
+      <span class="ats-rocket">🚀</span>
       <span class="ats-brand">ATS TAILOR</span>
       <span class="ats-status" id="ats-banner-status">${jobTitle ? `Tailoring for: ${jobTitle}` : 'Detecting...'}</span>
-      <span class="ats-timer" id="ats-banner-timer"></span>
     `;
     document.body.appendChild(banner);
-    
-    // Start timer
-    const timerStart = Date.now();
-    const timerEl = document.getElementById('ats-banner-timer');
-    const timerInterval = setInterval(() => {
-      const elapsed = ((Date.now() - timerStart) / 1000).toFixed(1);
-      if (timerEl) timerEl.textContent = `${elapsed}s`;
-      if (!document.getElementById('ats-auto-banner')) clearInterval(timerInterval);
-    }, 100);
   }
 
   function updateBanner(status, type = 'working') {
@@ -874,7 +850,23 @@
         banner.classList.add('working');
       }
     }
-    if (statusEl) statusEl.textContent = status;
+    // Simplified banner: only show role name, no turbo/% text
+    if (statusEl) {
+      // Extract just the role name if status contains extra info
+      const roleMatch = status.match(/Tailoring for:\s*(.+)/i);
+      if (roleMatch) {
+        statusEl.textContent = `Tailoring for: ${roleMatch[1]}`;
+      } else if (status.includes('✅')) {
+        // Success state - keep role name only
+        const roleFromStatus = status.match(/for:\s*([^-]+)/i);
+        statusEl.textContent = roleFromStatus ? `Complete: ${roleFromStatus[1].trim()}` : 'Complete!';
+      } else if (type === 'error') {
+        statusEl.textContent = status;
+      } else {
+        // Default: show as tailoring for role
+        statusEl.textContent = status.includes(':') ? status : `Tailoring for: ${status}`;
+      }
+    }
   }
 
   function hideBanner() {
@@ -1234,94 +1226,132 @@
     });
   }
 
-  // ============ TURBO PIPELINE (<1 SECOND TARGET - 75% FASTER) ============
+  // ============ TURBO PIPELINE - TRIGGERS POPUP BUTTON VIA MESSAGING ============
   async function fastAutoTailorPipeline(jobInfo) {
     const pipelineStart = Date.now();
-    console.log('[ATS Tailor] ⚡ TURBO pipeline for:', jobInfo.title);
+    console.log('[ATS Tailor] Triggering popup Extract & Apply Keywords button for:', jobInfo.title);
     
     try {
-      // ALL PARALLEL: Keywords + Session + Profile fetched simultaneously
-      updateBanner(`⚡ Turbo tailoring...`, 'working');
+      // Show simplified banner with just role name
+      updateBanner(`Tailoring for: ${jobInfo.title}`, 'working');
       
-      const jdText = jobInfo.description || document.body.textContent;
-      
-      // INSTANT: Keywords extracted synchronously (no await)
-      const keywords = fastExtractKeywords(jdText);
-      console.log('[ATS Tailor] Keywords extracted:', keywords.length, 'in', Date.now() - pipelineStart, 'ms');
-      
-      // PARALLEL: Get session + cached profile simultaneously
-      const [session, cachedProfile] = await Promise.all([
-        new Promise(r => chrome.storage.local.get(['ats_session'], res => r(res.ats_session))),
-        new Promise(r => chrome.storage.local.get(['ats_cached_profile'], res => r(res.ats_cached_profile)))
-      ]);
-      
-      if (!session?.access_token) {
-        updateBanner('Please login via extension popup first', 'error');
-        return null;
-      }
-      
-      // Use cached profile if available (skip fetch), otherwise fetch + cache
-      let p = cachedProfile;
-      if (!p || !p.user_id) {
-        const profileRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${session.user.id}&select=*`,
-          { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}` } }
-        );
-        const rows = await profileRes.json();
-        p = rows?.[0] || {};
-        // Cache for next time (expires in 5 min)
-        chrome.storage.local.set({ ats_cached_profile: p, ats_profile_cached_at: Date.now() });
-      }
-      
-      // TURBO: Call tailor API with pre-extracted keywords
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/tailor-application`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-          apikey: SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
-          jobTitle: jobInfo.title,
-          company: jobInfo.company,
-          location: jobInfo.location,
-          description: jobInfo.description,
-          extractedKeywords: keywords,
-          requirements: [],
-          turboMode: true, // Signal API to skip re-extraction
-          userProfile: {
-            firstName: p.first_name || '',
-            lastName: p.last_name || '',
-            email: p.email || session.user.email || '',
-            phone: p.phone || '',
-            linkedin: p.linkedin || '',
-            github: p.github || '',
-            portfolio: p.portfolio || '',
-            coverLetter: p.cover_letter || '',
-            workExperience: Array.isArray(p.work_experience) ? p.work_experience : [],
-            education: Array.isArray(p.education) ? p.education : [],
-            skills: Array.isArray(p.skills) ? p.skills : [],
-            certifications: Array.isArray(p.certifications) ? p.certifications : [],
-            achievements: Array.isArray(p.achievements) ? p.achievements : [],
-            atsStrategy: p.ats_strategy || '',
-            city: p.city || undefined,
-            country: p.country || undefined,
-          },
-        }),
+      // Send message to popup to trigger the "Extract & Apply Keywords to CV" button
+      // This creates a visible pressed/loading state in the popup
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({
+          action: 'TRIGGER_EXTRACT_APPLY',
+          jobInfo: jobInfo
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.log('[ATS Tailor] Popup not open, falling back to direct API call');
+            // Fallback: If popup is not open, call API directly
+            fallbackDirectTailor(jobInfo).then(resolve).catch(reject);
+          } else {
+            console.log('[ATS Tailor] Popup triggered successfully:', response);
+            // Wait for popup to complete and get files from storage
+            setTimeout(async () => {
+              const { cvPDF, coverPDF, cvFileName, coverFileName } = await new Promise(r => 
+                chrome.storage.local.get(['cvPDF', 'coverPDF', 'cvFileName', 'coverFileName'], r)
+              );
+              if (cvPDF) {
+                resolve({ 
+                  resumePdf: cvPDF, 
+                  coverLetterPdf: coverPDF,
+                  cvFileName, 
+                  coverFileName,
+                  matchScore: 100 
+                });
+              } else {
+                // Still waiting, check again
+                setTimeout(async () => {
+                  const data = await new Promise(r => 
+                    chrome.storage.local.get(['cvPDF', 'coverPDF', 'cvFileName', 'coverFileName', 'ats_lastGeneratedDocuments'], r)
+                  );
+                  resolve({ 
+                    resumePdf: data.cvPDF, 
+                    coverLetterPdf: data.coverPDF,
+                    ...data.ats_lastGeneratedDocuments,
+                    matchScore: data.ats_lastGeneratedDocuments?.matchScore || 100 
+                  });
+                }, 5000);
+              }
+            }, 3000);
+          }
+        });
       });
-      
-      if (!response.ok) throw new Error('Tailoring API failed');
-      
-      const result = await response.json();
-      const elapsed = ((Date.now() - pipelineStart) / 1000).toFixed(1);
-      console.log('[ATS Tailor] ⚡ TURBO complete in', elapsed, 's, match:', result.matchScore + '%');
-      
-      return { ...result, keywords, profile: p };
       
     } catch (error) {
       console.error('[ATS Tailor] Pipeline error:', error);
       throw error;
     }
+  }
+  
+  // Fallback direct API call when popup is not open
+  async function fallbackDirectTailor(jobInfo) {
+    const jdText = jobInfo.description || document.body.textContent;
+    const keywords = fastExtractKeywords(jdText);
+    
+    const [session, cachedProfile] = await Promise.all([
+      new Promise(r => chrome.storage.local.get(['ats_session'], res => r(res.ats_session))),
+      new Promise(r => chrome.storage.local.get(['ats_cached_profile'], res => r(res.ats_cached_profile)))
+    ]);
+    
+    if (!session?.access_token) {
+      updateBanner('Please login via extension popup first', 'error');
+      return null;
+    }
+    
+    let p = cachedProfile;
+    if (!p || !p.user_id) {
+      const profileRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${session.user.id}&select=*`,
+        { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}` } }
+      );
+      const rows = await profileRes.json();
+      p = rows?.[0] || {};
+      chrome.storage.local.set({ ats_cached_profile: p, ats_profile_cached_at: Date.now() });
+    }
+    
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/tailor-application`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+        apikey: SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({
+        jobTitle: jobInfo.title,
+        company: jobInfo.company,
+        location: jobInfo.location,
+        description: jobInfo.description,
+        extractedKeywords: keywords,
+        requirements: [],
+        turboMode: true,
+        userProfile: {
+          firstName: p.first_name || '',
+          lastName: p.last_name || '',
+          email: p.email || session.user.email || '',
+          phone: p.phone || '',
+          linkedin: p.linkedin || '',
+          github: p.github || '',
+          portfolio: p.portfolio || '',
+          coverLetter: p.cover_letter || '',
+          workExperience: Array.isArray(p.work_experience) ? p.work_experience : [],
+          education: Array.isArray(p.education) ? p.education : [],
+          skills: Array.isArray(p.skills) ? p.skills : [],
+          certifications: Array.isArray(p.certifications) ? p.certifications : [],
+          achievements: Array.isArray(p.achievements) ? p.achievements : [],
+          atsStrategy: p.ats_strategy || '',
+          city: p.city || undefined,
+          country: p.country || undefined,
+        },
+      }),
+    });
+    
+    if (!response.ok) throw new Error('Tailoring API failed');
+    
+    const result = await response.json();
+    return { ...result, keywords, profile: p };
   }
 
   // ============ INSTANT KEYWORD EXTRACTION (SYNCHRONOUS - NO AWAIT) ============
@@ -1403,7 +1433,7 @@
       removeLazyApplyAttachments();
       loadFilesAndStart();
       
-      updateBanner(`✅ ${result.matchScore}% match - ${cvFileName}`, 'success');
+      updateBanner(`Complete: ${jobInfo.title}`, 'success');
       hideBanner();
 
     } catch (error) {

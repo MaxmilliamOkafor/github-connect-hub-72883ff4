@@ -211,6 +211,54 @@ class ATSTailor {
     document.getElementById('password')?.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') this.login();
     });
+    
+    // Listen for runtime messages to trigger Extract & Apply Keywords button
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message.action === 'TRIGGER_EXTRACT_APPLY') {
+        console.log('[ATS Tailor Popup] Received TRIGGER_EXTRACT_APPLY from content script');
+        this.triggerExtractApplyWithUI(message.jobInfo);
+        sendResponse({ status: 'triggered' });
+        return true;
+      }
+    });
+  }
+  
+  /**
+   * Trigger Extract & Apply Keywords button with visible pressed/loading state
+   * Called via runtime messaging from content.js automation
+   */
+  async triggerExtractApplyWithUI(jobInfo) {
+    const btn = document.getElementById('tailorBtn');
+    if (!btn) {
+      console.warn('[ATS Tailor Popup] tailorBtn not found');
+      return;
+    }
+    
+    // Show pressed/loading state
+    btn.classList.add('pressed', 'loading');
+    btn.disabled = true;
+    const originalText = btn.querySelector('.btn-text')?.textContent || 'Extract & Apply Keywords to CV';
+    if (btn.querySelector('.btn-text')) {
+      btn.querySelector('.btn-text').textContent = 'Processing...';
+    }
+    
+    // If jobInfo provided, update current job
+    if (jobInfo) {
+      this.currentJob = jobInfo;
+      this.updateJobDisplay();
+    }
+    
+    try {
+      // Run the same tailorDocuments handler
+      await this.tailorDocuments({ force: true });
+    } finally {
+      // Remove pressed/loading state after completion
+      btn.classList.remove('pressed', 'loading');
+      btn.disabled = false;
+      if (btn.querySelector('.btn-text')) {
+        btn.querySelector('.btn-text').textContent = originalText;
+      }
+    }
   }
 
   async loadWorkdaySettings() {
