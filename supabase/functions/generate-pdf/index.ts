@@ -591,13 +591,26 @@ async function handleRawContentRequest(body: {
     let headerProcessed = false;
     
     for (const line of lines) {
-      // Handle header line with dynamic location replacement
-      if (!headerProcessed && line.includes('|') && line.includes('@') && /open to relocation/i.test(line)) {
+      // Handle header/contact line with dynamic location replacement
+      // Match any line that looks like: phone | email | location (with pipes and @ symbol)
+      if (!headerProcessed && line.includes('|') && line.includes('@')) {
         const parts = line.split('|').map(p => p.trim());
-        // Expected format: phone | email | location | open to relocation
-        if (parts.length >= 4 && tailoredLocation) {
-          // Replace the location part (index 2) with tailoredLocation
-          parts[2] = tailoredLocation;
+        
+        // Find and replace the location part if tailoredLocation is provided
+        // Location is typically the part that's not phone (digits) and not email (@)
+        if (parts.length >= 3 && tailoredLocation) {
+          for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+            // Skip phone numbers (mostly digits) and emails (contains @)
+            if (/^\+?[\d\s\-\(\)]+$/.test(part.replace(/\s/g, ''))) continue;
+            if (part.includes('@')) continue;
+            // Skip if it's a URL
+            if (part.includes('http') || part.includes('linkedin') || part.includes('github')) continue;
+            // This is likely the location - replace it
+            console.log(`[generate-pdf] Replacing location "${parts[i]}" with "${tailoredLocation}"`);
+            parts[i] = tailoredLocation;
+            break;
+          }
         }
         
         ensureSpace(LINE_HEIGHT);
