@@ -214,13 +214,47 @@ class ATSTailor {
     
     // Listen for runtime messages to trigger Extract & Apply Keywords button
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      if (message.action === 'TRIGGER_EXTRACT_APPLY') {
-        console.log('[ATS Tailor Popup] Received TRIGGER_EXTRACT_APPLY from content script');
+      if (message.action === 'TRIGGER_EXTRACT_APPLY' || message.action === 'POPUP_TRIGGER_EXTRACT_APPLY') {
+        console.log('[ATS Tailor Popup] Received trigger message:', message.action);
         this.triggerExtractApplyWithUI(message.jobInfo);
         sendResponse({ status: 'triggered' });
         return true;
       }
     });
+    
+    // Check for pending automation trigger on popup open
+    this.checkPendingAutomationTrigger();
+  }
+  
+  /**
+   * Check for pending automation trigger when popup opens
+   * If automation triggered while popup was closed, execute it now
+   */
+  async checkPendingAutomationTrigger() {
+    const result = await new Promise(resolve => {
+      chrome.storage.local.get(['pending_extract_apply'], resolve);
+    });
+    
+    if (result.pending_extract_apply?.triggeredFromAutomation) {
+      const pendingTrigger = result.pending_extract_apply;
+      const age = Date.now() - (pendingTrigger.timestamp || 0);
+      
+      // Only process if trigger is recent (within 30 seconds)
+      if (age < 30000) {
+        console.log('[ATS Tailor Popup] Found pending automation trigger, executing...');
+        
+        // Clear the pending trigger
+        await chrome.storage.local.remove(['pending_extract_apply']);
+        
+        // Wait for DOM to be ready and session loaded
+        setTimeout(() => {
+          this.triggerExtractApplyWithUI(pendingTrigger.jobInfo);
+        }, 500);
+      } else {
+        // Clear stale trigger
+        await chrome.storage.local.remove(['pending_extract_apply']);
+      }
+    }
   }
   
   /**
@@ -234,12 +268,16 @@ class ATSTailor {
       return;
     }
     
-    // Show pressed/loading state
+    // Show pressed/loading state with visual feedback
     btn.classList.add('pressed', 'loading');
     btn.disabled = true;
-    const originalText = btn.querySelector('.btn-text')?.textContent || 'Extract & Apply Keywords to CV';
-    if (btn.querySelector('.btn-text')) {
-      btn.querySelector('.btn-text').textContent = 'Processing...';
+    btn.style.transform = 'scale(0.98)';
+    btn.style.boxShadow = 'inset 0 2px 8px rgba(0,0,0,0.3)';
+    
+    const btnText = btn.querySelector('.btn-text');
+    const originalText = btnText?.textContent || 'Extract & Apply Keywords to CV';
+    if (btnText) {
+      btnText.textContent = '⚡ Processing...';
     }
     
     // If jobInfo provided, update current job
@@ -251,12 +289,18 @@ class ATSTailor {
     try {
       // Run the same tailorDocuments handler
       await this.tailorDocuments({ force: true });
+      
+      // Notify background that extraction is complete
+      chrome.runtime.sendMessage({ action: 'EXTRACT_APPLY_COMPLETE' }).catch(() => {});
+      
     } finally {
       // Remove pressed/loading state after completion
       btn.classList.remove('pressed', 'loading');
       btn.disabled = false;
-      if (btn.querySelector('.btn-text')) {
-        btn.querySelector('.btn-text').textContent = originalText;
+      btn.style.transform = '';
+      btn.style.boxShadow = '';
+      if (btnText) {
+        btnText.textContent = originalText;
       }
     }
   }
