@@ -594,7 +594,10 @@ async function handleRawContentRequest(body: {
       // Handle header/contact line with dynamic location replacement
       // Match any line that looks like: phone | email | location (with pipes and @ symbol)
       if (!headerProcessed && line.includes('|') && line.includes('@')) {
-        const parts = line.split('|').map(p => p.trim());
+        let parts = line.split('|').map(p => p.trim());
+        
+        // Remove "open to relocation" part entirely - we use clean "City, Country" format
+        parts = parts.filter(p => !/open\s*to\s*relocation/i.test(p));
         
         // Find and replace the location part if tailoredLocation is provided
         // Location is typically the part that's not phone (digits) and not email (@)
@@ -606,11 +609,27 @@ async function handleRawContentRequest(body: {
             if (part.includes('@')) continue;
             // Skip if it's a URL
             if (part.includes('http') || part.includes('linkedin') || part.includes('github')) continue;
-            // This is likely the location - replace it
+            // Skip if it contains "Remote" as standalone (will be replaced)
+            // This is likely the location - replace it with clean "City, Country" format
             console.log(`[generate-pdf] Replacing location "${parts[i]}" with "${tailoredLocation}"`);
             parts[i] = tailoredLocation;
             break;
           }
+        }
+        
+        // Ensure we have a clean location even if not provided
+        const hasLocation = parts.some(p => {
+          if (/^\+?[\d\s\-\(\)]+$/.test(p.replace(/\s/g, ''))) return false;
+          if (p.includes('@')) return false;
+          if (p.includes('http') || p.includes('linkedin') || p.includes('github')) return false;
+          return true;
+        });
+        
+        // If no location found and tailoredLocation provided, add it
+        if (!hasLocation && tailoredLocation) {
+          // Insert location after email (index 1 typically)
+          const insertIndex = Math.min(2, parts.length);
+          parts.splice(insertIndex, 0, tailoredLocation);
         }
         
         ensureSpace(LINE_HEIGHT);

@@ -246,37 +246,135 @@ function extractJobCity(jdLocation: string | undefined, jdDescription: string, j
   return null;
 }
 
-// Smart location logic - formats as "[CITY] | open to relocation" for CV ONLY
+// Default location when nothing is specified or remote
+const DEFAULT_LOCATION = 'Dublin, Ireland';
+
+// Country mapping for normalization
+const COUNTRY_MAP: Record<string, string> = {
+  'us': 'United States',
+  'usa': 'United States',
+  'united states': 'United States',
+  'u.s.': 'United States',
+  'u.s.a.': 'United States',
+  'america': 'United States',
+  'uk': 'United Kingdom',
+  'united kingdom': 'United Kingdom',
+  'great britain': 'United Kingdom',
+  'england': 'United Kingdom',
+  'gb': 'United Kingdom',
+  'canada': 'Canada',
+  'australia': 'Australia',
+  'germany': 'Germany',
+  'france': 'France',
+  'ireland': 'Ireland',
+  'netherlands': 'Netherlands',
+  'spain': 'Spain',
+  'italy': 'Italy',
+  'switzerland': 'Switzerland',
+  'sweden': 'Sweden',
+  'norway': 'Norway',
+  'denmark': 'Denmark',
+  'belgium': 'Belgium',
+  'austria': 'Austria',
+  'poland': 'Poland',
+  'portugal': 'Portugal'
+};
+
+/**
+ * Smart location logic - formats as "City, Country" for ATS optimization
+ * Rules:
+ * 1. Standard format: "City, Country"
+ * 2. If job specifies location, match it in that format
+ * 3. If location is not specified or says "Remote", default to "Dublin, Ireland"
+ * 4. If it mentions only "US", use "United States" as country
+ * 5. No addresses, counties/states unless explicitly in posting
+ */
 function getSmartLocation(jdLocation: string | undefined, jdDescription: string, profileCity?: string, profileCountry?: string, jobUrl?: string, preExtractedCity?: string): string {
-  // Priority 1: Use city pre-extracted by extension if provided
+  console.log(`[getSmartLocation] Input - jdLocation: "${jdLocation}", preExtractedCity: "${preExtractedCity}"`);
+  
+  // Priority 1: Use city pre-extracted by extension if provided (already in "City, Country" format)
   if (preExtractedCity && preExtractedCity.trim().length > 0) {
-    console.log(`Using pre-extracted city from extension: ${preExtractedCity}`);
-    return `${preExtractedCity} | open to relocation`;
+    // If it's already in "City, Country" format, use as-is
+    if (preExtractedCity.includes(',')) {
+      console.log(`[getSmartLocation] Using pre-extracted location: ${preExtractedCity}`);
+      return preExtractedCity;
+    }
+    // Otherwise, it's just a city - need to determine country
+    const city = preExtractedCity.trim();
+    console.log(`[getSmartLocation] Pre-extracted city only: ${city}`);
+    return `${city}, ${profileCountry || 'Ireland'}`;
+  }
+  
+  // Normalize the job location text
+  const locationText = (jdLocation || '').toLowerCase().trim();
+  const jdText = `${jdLocation || ''} ${jdDescription}`.toLowerCase();
+  
+  // Check if location is essentially "Remote" or unspecified
+  const isRemote = !locationText || 
+                   /^(remote|fully?\s*remote|work\s*from\s*(home|anywhere)|anywhere|worldwide|global|distributed|wfh)$/i.test(locationText) ||
+                   /^\s*remote\s*$/i.test(locationText);
+  
+  if (isRemote && !/\b(us|usa|united states)\b/i.test(jdText)) {
+    console.log(`[getSmartLocation] Remote/unspecified, using default: ${DEFAULT_LOCATION}`);
+    return DEFAULT_LOCATION;
+  }
+  
+  // Handle US-only mentions: "US", "USA", "United States" without city
+  const usOnlyPattern = /^(us|usa|united\s*states|u\.s\.?a?\.?)$/i;
+  if (usOnlyPattern.test(locationText.replace(/remote/gi, '').trim())) {
+    console.log(`[getSmartLocation] US only detected: United States`);
+    return 'United States';
+  }
+  
+  // Handle "Remote (anywhere in US)" or US mentions with potential city
+  if (/\b(us|usa|united\s*states|u\.s\.?a?\.?)\b/i.test(jdLocation || '')) {
+    // Try to extract city from job listing
+    const extractedCity = extractJobCity(jdLocation, jdDescription, jobUrl);
+    if (extractedCity) {
+      console.log(`[getSmartLocation] City + US: ${extractedCity}, United States`);
+      return `${extractedCity}, United States`;
+    }
+    console.log(`[getSmartLocation] US mention without city: United States`);
+    return 'United States';
   }
   
   // Priority 2: Extract city from job listing
   const extractedCity = extractJobCity(jdLocation, jdDescription, jobUrl);
   
-  // If we found a city in the job listing, use it with relocation suffix
   if (extractedCity) {
-    return `${extractedCity} | open to relocation`;
-  }
-  
-  // Check if job is remote
-  const jdText = `${jdLocation || ''} ${jdDescription}`.toLowerCase();
-  if (/\b(remote|worldwide|global|anywhere|distributed|work from home|wfh)\b/.test(jdText)) {
-    if (profileCity && profileCountry) {
-      return `${profileCity} | Remote`;
+    // Try to determine country from job location text
+    for (const [code, country] of Object.entries(COUNTRY_MAP)) {
+      if (new RegExp(`\\b${code}\\b`, 'i').test(jdLocation || '')) {
+        console.log(`[getSmartLocation] Extracted: ${extractedCity}, ${country}`);
+        return `${extractedCity}, ${country}`;
+      }
     }
-    return "Remote | open to relocation";
+    
+    // Check common city-country mappings
+    const cityCountryMap: Record<string, string> = {
+      'london': 'United Kingdom', 'manchester': 'United Kingdom', 'birmingham': 'United Kingdom', 'edinburgh': 'United Kingdom',
+      'dublin': 'Ireland', 'cork': 'Ireland', 'galway': 'Ireland',
+      'paris': 'France', 'berlin': 'Germany', 'amsterdam': 'Netherlands', 'munich': 'Germany',
+      'toronto': 'Canada', 'vancouver': 'Canada', 'montreal': 'Canada',
+      'sydney': 'Australia', 'melbourne': 'Australia',
+      'singapore': 'Singapore', 'tokyo': 'Japan', 'hong kong': 'Hong Kong'
+    };
+    
+    const cityLower = extractedCity.toLowerCase();
+    if (cityCountryMap[cityLower]) {
+      console.log(`[getSmartLocation] Known city: ${extractedCity}, ${cityCountryMap[cityLower]}`);
+      return `${extractedCity}, ${cityCountryMap[cityLower]}`;
+    }
+    
+    // If city extracted but no country context, use profile country or default
+    const country = profileCountry || 'Ireland';
+    console.log(`[getSmartLocation] City with profile country: ${extractedCity}, ${country}`);
+    return `${extractedCity}, ${country}`;
   }
   
-  // Fallback to profile location with relocation suffix
-  if (profileCity) {
-    return `${profileCity} | open to relocation`;
-  }
-  
-  return "Remote | open to relocation";
+  // Fallback to default
+  console.log(`[getSmartLocation] Fallback to default: ${DEFAULT_LOCATION}`);
+  return DEFAULT_LOCATION;
 }
 
 // Jobscan-style keyword extraction - enhanced for ATS ranking
