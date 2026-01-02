@@ -140,20 +140,39 @@
       return 'Open to relocation';
     },
 
+    // Default location when nothing is specified or remote
+    DEFAULT_LOCATION: 'Dublin, Ireland',
+
     /**
-     * Normalize location string to professional format
-     * Handles: "REMOTE (anywhere in US)" -> "United States"
+     * Normalize location string to ATS-friendly "City, Country" format
+     * Rules:
+     * 1. Standard format: "City, Country"
+     * 2. If job specifies location, match it in that format
+     * 3. If location is not specified or says "Remote", default to "Dublin, Ireland"
+     * 4. If it mentions only "US", use "United States" as country
+     * 5. No addresses, counties/states unless explicitly in posting
+     * 6. Plain text only for ATS parsing
      * @param {string} text - Raw location text
-     * @returns {string} Normalized location
+     * @returns {string} Normalized location in "City, Country" format
      */
     normalizeLocation(text) {
-      if (!text) return 'Open to relocation';
+      if (!text) return this.DEFAULT_LOCATION;
       
+      const originalText = text;
       let location = text.toLowerCase().trim();
       
-      // Remove common noise
-      location = location
-        .replace(/[\(\[\{].*?[\)\]\}]/g, ' ') // Remove parentheticals first pass
+      // Check if location is essentially "Remote" or unspecified
+      const isRemote = /^(remote|fully?\s*remote|work\s*from\s*(home|anywhere)|anywhere|worldwide|global|distributed|wfh)$/i.test(location) ||
+                       /^\s*remote\s*$/i.test(location);
+      
+      if (isRemote) {
+        console.log('[LocationTailor] Remote detected, using default:', this.DEFAULT_LOCATION);
+        return this.DEFAULT_LOCATION;
+      }
+      
+      // Remove common noise but preserve city/country info
+      let cleanedLocation = originalText
+        .replace(/[\(\[\{].*?[\)\]\}]/g, ' ') // Remove parentheticals
         .replace(/remote\s*[-–—]?\s*/gi, '')
         .replace(/hybrid\s*[-–—]?\s*/gi, '')
         .replace(/on-?site\s*[-–—]?\s*/gi, '')
@@ -161,66 +180,101 @@
         .replace(/work\s*from\s*(home|anywhere)/gi, '')
         .replace(/fully?\s*remote/gi, '')
         .replace(/,?\s*remote\s*$/gi, '')
+        .replace(/\bor\s+remote\b/gi, '')
+        .replace(/\|/g, ',')
         .trim();
+      
+      // If cleaned text is empty or just noise, return default
+      if (!cleanedLocation || cleanedLocation.length < 2) {
+        return this.DEFAULT_LOCATION;
+      }
 
-      // Handle "REMOTE (anywhere in US)" pattern
-      if (text.toLowerCase().includes('us') || 
-          text.toLowerCase().includes('united states') ||
-          text.toLowerCase().includes('usa')) {
-        
-        // Extract city if present before US
-        const cityMatch = text.match(/([A-Za-z\s]+)(?:,\s*)(?:US|USA|United\s*States)/i);
-        if (cityMatch && cityMatch[1].trim().length > 1) {
-          const city = this.capitalizeWords(cityMatch[1].trim());
-          // Filter out noise words
-          if (!['remote', 'anywhere', 'in', 'the', 'hybrid'].includes(city.toLowerCase())) {
-            return `${city}, United States`;
-          }
-        }
+      // Handle US-only mentions: "US", "USA", "United States" without city
+      const usOnlyPattern = /^(us|usa|united\s*states|u\.s\.?a?\.?)$/i;
+      if (usOnlyPattern.test(cleanedLocation.trim())) {
+        console.log('[LocationTailor] US only detected, using: United States');
         return 'United States';
       }
 
-      // Check for country codes/names
+      // Handle "REMOTE (anywhere in US)" or just "US" mentions
+      if (/\b(us|usa|united\s*states|u\.s\.?a?\.?)\b/i.test(originalText)) {
+        // Try to extract city before US mention
+        const cityUSMatch = originalText.match(/([A-Za-z\s]+?)(?:,\s*|\s+)(?:US|USA|United\s*States|U\.S\.?A?\.?)/i);
+        if (cityUSMatch && cityUSMatch[1].trim().length > 1) {
+          const city = this.capitalizeWords(cityUSMatch[1].trim());
+          // Filter out noise words
+          if (!['remote', 'anywhere', 'in', 'the', 'hybrid', 'or'].includes(city.toLowerCase())) {
+            console.log('[LocationTailor] City + US:', city);
+            return `${city}, United States`;
+          }
+        }
+        // No city found, just return United States
+        return 'United States';
+      }
+
+      // Check for country codes/names and extract "City, Country" format
       for (const [code, country] of Object.entries(this.COUNTRY_MAP)) {
-        if (location.includes(code)) {
+        const codePattern = new RegExp(`\\b${code}\\b`, 'i');
+        if (codePattern.test(cleanedLocation)) {
           // Extract city before country
-          const parts = location.split(/[,\s]+/);
-          const countryIndex = parts.findIndex(p => p.includes(code));
-          if (countryIndex > 0) {
-            const cityParts = parts.slice(0, countryIndex).filter(p => 
-              !['remote', 'hybrid', 'anywhere', 'in', 'the'].includes(p)
-            );
-            if (cityParts.length > 0) {
-              const city = this.capitalizeWords(cityParts.join(' '));
+          const cityCountryMatch = cleanedLocation.match(new RegExp(`([A-Za-z\\s]+?)(?:,\\s*|\\s+)${code}`, 'i'));
+          if (cityCountryMatch && cityCountryMatch[1].trim().length > 1) {
+            const city = this.capitalizeWords(cityCountryMatch[1].trim());
+            if (!['remote', 'hybrid', 'anywhere', 'in', 'the', 'or'].includes(city.toLowerCase())) {
               return `${city}, ${country}`;
             }
+          }
+          // Check if there's a city mentioned separately
+          const parts = cleanedLocation.split(/[,\s]+/).filter(p => 
+            p.length > 1 && !['remote', 'hybrid', 'anywhere', 'in', 'the', 'or'].includes(p.toLowerCase())
+          );
+          if (parts.length > 1) {
+            const city = this.capitalizeWords(parts[0]);
+            return `${city}, ${country}`;
           }
           return country;
         }
       }
 
-      // Check for US state abbreviations
+      // Check for US state abbreviations - convert to "City, United States" (no state)
       for (const [abbr, stateName] of Object.entries(this.US_STATES)) {
         const statePattern = new RegExp(`\\b${abbr}\\b`, 'i');
-        if (statePattern.test(location)) {
+        if (statePattern.test(cleanedLocation)) {
           // Extract city before state
-          const cityMatch = location.match(new RegExp(`([A-Za-z\\s]+),?\\s*${abbr}`, 'i'));
-          if (cityMatch && cityMatch[1].trim().length > 1) {
-            const city = this.capitalizeWords(cityMatch[1].trim());
-            if (!['remote', 'anywhere', 'in', 'hybrid'].includes(city.toLowerCase())) {
-              return `${city}, ${stateName}, United States`;
+          const cityStateMatch = cleanedLocation.match(new RegExp(`([A-Za-z\\s]+?)(?:,\\s*|\\s+)${abbr}`, 'i'));
+          if (cityStateMatch && cityStateMatch[1].trim().length > 1) {
+            const city = this.capitalizeWords(cityStateMatch[1].trim());
+            if (!['remote', 'anywhere', 'in', 'hybrid', 'or'].includes(city.toLowerCase())) {
+              // Return "City, United States" - no state per ATS rules
+              return `${city}, United States`;
             }
           }
-          return `${stateName}, United States`;
+          // No city, just return United States
+          return 'United States';
         }
       }
 
-      // If we have meaningful text remaining, capitalize it
-      if (location.length > 1 && !['remote', 'hybrid', 'anywhere'].includes(location)) {
-        return this.capitalizeWords(location);
+      // If we have a clean city name, try to identify and format it
+      const cityOnly = this.capitalizeWords(cleanedLocation.split(',')[0].trim());
+      if (cityOnly.length > 1 && !['remote', 'hybrid', 'anywhere'].includes(cityOnly.toLowerCase())) {
+        // Check if second part is a country
+        const parts = cleanedLocation.split(',').map(p => p.trim());
+        if (parts.length >= 2) {
+          const potentialCountry = parts[1].toLowerCase();
+          for (const [code, country] of Object.entries(this.COUNTRY_MAP)) {
+            if (potentialCountry.includes(code)) {
+              return `${cityOnly}, ${country}`;
+            }
+          }
+          // Return as-is if it looks like "City, Country"
+          return `${cityOnly}, ${this.capitalizeWords(parts[1])}`;
+        }
+        // Single city without country - might need context
+        return cityOnly;
       }
 
-      return 'Open to relocation';
+      // Fallback to default
+      return this.DEFAULT_LOCATION;
     },
 
     /**
@@ -267,19 +321,21 @@
 
     /**
      * Generate tailored CV header with dynamic location
+     * Uses "City, Country" format - no "open to relocation" suffix
      * @param {Object} candidateData - User profile data
-     * @param {string} tailoredLocation - Normalized job location
+     * @param {string} tailoredLocation - Normalized job location in "City, Country" format
      * @returns {string} Formatted header
      */
     generateHeader(candidateData, tailoredLocation) {
       const phone = candidateData.phone || '+353 0874261508';
       const email = candidateData.email || 'maxokafordev@gmail.com';
-      const location = tailoredLocation || 'Open to relocation';
+      const location = tailoredLocation || this.DEFAULT_LOCATION;
       const linkedin = candidateData.linkedin || 'https://www.linkedin.com/in/maxokafor/';
       const github = candidateData.github || 'https://github.com/MaxmilliamOkafor';
       const portfolio = candidateData.portfolio || 'https://maxmilliamplusplus.web.app/';
 
-      return `${phone} | ${email} | ${location} | open to relocation
+      // Clean format: phone | email | City, Country
+      return `${phone} | ${email} | ${location}
 ${linkedin} | ${github} | ${portfolio}`;
     }
   };
