@@ -592,48 +592,49 @@ async function handleRawContentRequest(body: {
     
     for (const line of lines) {
       // Handle header/contact line with dynamic location replacement
-      // Match any line that looks like: phone | email | location (with pipes and @ symbol)
+      // PRESERVE ORIGINAL FORMAT: Keep "open to relocation" and original structure
+      // Only replace the city/location part with tailoredLocation if provided
       if (!headerProcessed && line.includes('|') && line.includes('@')) {
-        let parts = line.split('|').map(p => p.trim());
+        let processedLine = line;
         
-        // Remove "open to relocation" part entirely - we use clean "City, Country" format
-        parts = parts.filter(p => !/open\s*to\s*relocation/i.test(p));
-        
-        // Find and replace the location part if tailoredLocation is provided
-        // Location is typically the part that's not phone (digits) and not email (@)
-        if (parts.length >= 3 && tailoredLocation) {
-          for (let i = 0; i < parts.length; i++) {
-            const part = parts[i];
-            // Skip phone numbers (mostly digits) and emails (contains @)
-            if (/^\+?[\d\s\-\(\)]+$/.test(part.replace(/\s/g, ''))) continue;
-            if (part.includes('@')) continue;
-            // Skip if it's a URL
-            if (part.includes('http') || part.includes('linkedin') || part.includes('github')) continue;
-            // Skip if it contains "Remote" as standalone (will be replaced)
-            // This is likely the location - replace it with clean "City, Country" format
-            console.log(`[generate-pdf] Replacing location "${parts[i]}" with "${tailoredLocation}"`);
-            parts[i] = tailoredLocation;
-            break;
+        // Only replace location if tailoredLocation is provided
+        if (tailoredLocation) {
+          // Pattern: find location-like text (City name before "open to relocation" or before pipe)
+          // Match patterns like "Boston | open to relocation" or "Dublin, Ireland | open"
+          const locationPatterns = [
+            /\|\s*([A-Z][a-zA-Z\s,]+?)\s*\|\s*open\s*to\s*relocation/i,  // Location before "open to relocation"
+            /\|\s*([A-Z][a-zA-Z\s,]+?)\s*(?:\||\n|$)/g  // General location pattern
+          ];
+          
+          // Try to find and replace location
+          let replaced = false;
+          for (const pattern of locationPatterns) {
+            if (pattern.test(processedLine)) {
+              // Find the location part and replace just the city
+              const parts = processedLine.split('|').map(p => p.trim());
+              for (let i = 0; i < parts.length; i++) {
+                const part = parts[i];
+                // Skip phone, email, URLs, and "open to relocation"
+                if (/^\+?[\d\s\-\(\)]+$/.test(part.replace(/\s/g, ''))) continue;
+                if (part.includes('@')) continue;
+                if (part.includes('http') || part.includes('linkedin') || part.includes('github')) continue;
+                if (/open\s*to\s*relocation/i.test(part)) continue;
+                // This is the location - replace it
+                console.log(`[generate-pdf] Replacing location "${parts[i]}" with "${tailoredLocation}"`);
+                parts[i] = tailoredLocation;
+                replaced = true;
+                break;
+              }
+              if (replaced) {
+                processedLine = parts.join(' | ');
+                break;
+              }
+            }
           }
         }
         
-        // Ensure we have a clean location even if not provided
-        const hasLocation = parts.some(p => {
-          if (/^\+?[\d\s\-\(\)]+$/.test(p.replace(/\s/g, ''))) return false;
-          if (p.includes('@')) return false;
-          if (p.includes('http') || p.includes('linkedin') || p.includes('github')) return false;
-          return true;
-        });
-        
-        // If no location found and tailoredLocation provided, add it
-        if (!hasLocation && tailoredLocation) {
-          // Insert location after email (index 1 typically)
-          const insertIndex = Math.min(2, parts.length);
-          parts.splice(insertIndex, 0, tailoredLocation);
-        }
-        
         ensureSpace(LINE_HEIGHT);
-        currentPage.drawText(parts.join(' | '), {
+        currentPage.drawText(processedLine, {
           x: MARGIN,
           y: yPosition,
           size: 10,
