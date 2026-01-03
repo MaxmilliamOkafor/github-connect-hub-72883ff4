@@ -202,27 +202,39 @@
       preservedMetrics: []
     };
 
+    // Track which keywords are already in the CV
+    const cvLower = cvText.toLowerCase();
+    const missingKeywords = jobKeywords.filter(kw => !cvLower.includes(kw.toLowerCase()));
+    const presentKeywords = jobKeywords.filter(kw => cvLower.includes(kw.toLowerCase()));
+    
+    console.log(`[UniqueCVEngine] Keywords: ${presentKeywords.length} present, ${missingKeywords.length} missing`);
+    
+    // Calculate keywords per bullet for even distribution across ALL bullets
+    const totalBullets = parsed.rawRoles.reduce((sum, role) => sum + role.originalBullets.length, 0);
+    const keywordsPerBullet = totalBullets > 0 ? Math.ceil(missingKeywords.length / totalBullets) : 2;
+    let keywordIndex = 0;
+
     // Process each role - PRESERVE company, title, dates; MODIFY bullets only
     const modifiedRoles = parsed.rawRoles.map((role, roleIdx) => {
       stats.rolesProcessed++;
       stats.preservedCompanies.push(role.company);
       stats.preservedTitles.push(role.title);
 
-      // Role weight: more recent roles get more keywords
-      const roleWeight = Math.max(1, 4 - roleIdx); // 4, 3, 2, 1 for first 4 roles
-      const keywordsForRole = jobKeywords.slice(0, 5 * roleWeight);
-
       const modifiedBullets = role.originalBullets.map((bullet, bulletIdx) => {
         // Preserve metrics in stats
         bullet.metrics.forEach(m => stats.preservedMetrics.push(m));
 
-        // Only modify if we haven't hit our keyword distribution target
-        if (usedKeywords.size >= jobKeywords.length * 0.8) return bullet.text;
+        // Get keywords for this bullet (distribute evenly)
+        const numToAdd = Math.min(CONFIG.MAX_KEYWORDS_PER_BULLET, keywordsPerBullet, missingKeywords.length - keywordIndex);
+        const keywordsForBullet = missingKeywords.slice(keywordIndex, keywordIndex + numToAdd);
+        keywordIndex += numToAdd;
+        
+        if (keywordsForBullet.length === 0) return bullet.text;
 
-        const enhanced = generateUniqueBullet(bullet, keywordsForRole, usedKeywords, bulletIdx);
+        const enhanced = generateUniqueBullet(bullet, keywordsForBullet, usedKeywords, bulletIdx);
         if (enhanced !== bullet.text) {
           stats.bulletsModified++;
-          stats.keywordsInjected += Math.min(2, keywordsForRole.length);
+          stats.keywordsInjected += keywordsForBullet.length;
         }
         return enhanced;
       });
