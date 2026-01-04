@@ -701,9 +701,51 @@
   }
 
   // ============ INIT - AUTO-DETECT AND TAILOR ============
+  
+  // Open popup and trigger Extract & Apply Keywords button automatically
+  async function triggerPopupExtractApply() {
+    const jobInfo = extractJobInfo();
+    console.log('[ATS Tailor] Triggering popup Extract & Apply for:', jobInfo.title);
+    
+    // Show banner immediately
+    createStatusBanner();
+    updateBanner(`Tailoring for: ${jobInfo.title || 'Unknown Role'}...`, 'working');
+    
+    // Set badge to indicate automation running
+    chrome.runtime.sendMessage({ action: 'openPopup' }).catch(() => {});
+    
+    // Send message to background to queue popup trigger
+    chrome.runtime.sendMessage({
+      action: 'TRIGGER_EXTRACT_APPLY',
+      jobInfo: jobInfo,
+      showButtonAnimation: true
+    }).then(response => {
+      console.log('[ATS Tailor] TRIGGER_EXTRACT_APPLY sent, response:', response);
+    }).catch(err => {
+      console.log('[ATS Tailor] Could not send to background:', err);
+    });
+    
+    // Also try to open popup programmatically (Chrome 99+)
+    try {
+      if (chrome.action && chrome.action.openPopup) {
+        await chrome.action.openPopup();
+      }
+    } catch (e) {
+      console.log('[ATS Tailor] Cannot open popup programmatically (requires user gesture)');
+    }
+  }
+  
   function initAutoTailor() {
-    // Wait for page to stabilize
+    // Immediately show banner on ATS detection
+    createStatusBanner();
+    updateBanner('ATS detected! Preparing...', 'working');
+    
+    // Trigger popup Extract & Apply immediately on ATS detection
     setTimeout(() => {
+      console.log('[ATS Tailor] ATS platform detected - triggering popup...');
+      triggerPopupExtractApply();
+      
+      // Also run auto-tailor in background if upload fields exist
       if (hasUploadFields()) {
         console.log('[ATS Tailor] Upload fields detected! Starting auto-tailor...');
         autoTailorDocuments();
@@ -729,7 +771,7 @@
           }
         }, 5000);
       }
-    }, 1500); // Wait 1.5s for page to load
+    }, 800); // Faster trigger - 800ms
   }
 
   // Start
