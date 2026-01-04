@@ -175,12 +175,66 @@ body {
   accent-color: #00d4ff;
 }
 
-.toggle-help {
+.toggle-help, .setting-help {
   margin-top: 6px;
   font-size: 10px;
   color: rgba(255,255,255,0.6);
   line-height: 1.2;
 }
+
+/* Location Setting */
+.location-setting {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.setting-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.9);
+  margin-bottom: 6px;
+}
+
+.setting-icon {
+  font-size: 12px;
+}
+
+.location-input-wrapper {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.location-input {
+  flex: 1;
+  padding: 7px 10px;
+  font-size: 11px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px;
+  color: #fff;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.location-input:focus {
+  border-color: #00d4ff;
+  box-shadow: 0 0 0 2px rgba(0,212,255,0.15);
+}
+
+.location-input::placeholder {
+  color: rgba(255,255,255,0.4);
+}
+
+.btn-save-location {
+  padding: 6px 10px;
+  font-size: 11px;
+  min-width: auto;
+}
+
 .user-email {
   color: rgba(255,255,255,0.8);
 }
