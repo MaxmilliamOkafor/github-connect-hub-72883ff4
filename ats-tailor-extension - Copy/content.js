@@ -103,10 +103,9 @@
   }
 
   function hideBanner() {
-    const banner = document.getElementById('ats-auto-banner');
-    if (banner) {
-      setTimeout(() => banner.remove(), 5000);
-    }
+    // Keep the banner visible permanently - don't remove it
+    // The orange ribbon should always stay visible on ATS platforms
+    console.log('[ATS Tailor] Banner will remain visible');
   }
 
   // ============ PDF FILE CREATION ============
