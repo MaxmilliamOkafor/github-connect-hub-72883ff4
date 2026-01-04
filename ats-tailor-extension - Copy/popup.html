@@ -54,6 +54,19 @@
           <input type="checkbox" id="autoTailorToggle" />
         </label>
         <p class="toggle-help">Runs once per job only when upload fields are detected.</p>
+        
+        <!-- Default Location Setting for Remote Jobs -->
+        <div class="location-setting">
+          <label for="defaultLocationInput" class="setting-label">
+            <span class="setting-icon">📍</span>
+            Default Location (for Remote jobs)
+          </label>
+          <div class="location-input-wrapper">
+            <input type="text" id="defaultLocationInput" class="location-input" placeholder="e.g., Dublin, Ireland" value="Dublin, IE">
+            <button id="saveLocationBtn" class="btn btn-small btn-save-location" title="Save location">💾</button>
+          </div>
+          <p class="setting-help">Used when job is Remote-only or location unavailable.</p>
+        </div>
       </div>
 
       <!-- Job Detection -->

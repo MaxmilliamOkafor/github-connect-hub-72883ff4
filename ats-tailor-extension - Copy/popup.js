@@ -53,7 +53,7 @@ class ATSTailor {
     
     // Keyword coverage report (diffs original CV vs boosted CV)
     this._coverageOriginalCV = '';
-    this._defaultLocation = 'Dublin, IE';
+    this._defaultLocation = 'Dublin, IE';  // Will be loaded from storage
     
     // DOM element references (query once, reuse)
     this._domRefs = {};
@@ -126,10 +126,13 @@ class ATSTailor {
   async loadSession() {
     return new Promise((resolve) => {
       chrome.storage.local.get(
-        ['ats_session', 'ats_stats', 'ats_todayDate', 'ats_autoTailorEnabled', 'ats_lastGeneratedDocuments', 'ats_lastJob'],
+        ['ats_session', 'ats_stats', 'ats_todayDate', 'ats_autoTailorEnabled', 'ats_lastGeneratedDocuments', 'ats_lastJob', 'ats_defaultLocation'],
         (result) => {
           this.session = result.ats_session || null;
           this.autoTailorEnabled = typeof result.ats_autoTailorEnabled === 'boolean' ? result.ats_autoTailorEnabled : true;
+          
+          // Load default location for Remote jobs
+          this._defaultLocation = result.ats_defaultLocation || 'Dublin, IE';
 
           // Restore last job/documents for preview continuity
           this.currentJob = result.ats_lastJob || this.currentJob;
@@ -209,8 +212,15 @@ class ATSTailor {
     });
     document.getElementById('saveWorkdayCreds')?.addEventListener('click', () => this.saveWorkdayCredentials());
     
-    // Load Workday settings
+    // Default location setting for Remote jobs
+    document.getElementById('saveLocationBtn')?.addEventListener('click', () => this.saveDefaultLocation());
+    document.getElementById('defaultLocationInput')?.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') this.saveDefaultLocation();
+    });
+    
+    // Load Workday settings and location settings
     this.loadWorkdaySettings();
+    this.loadLocationSettings();
 
     // Preview tabs
     document.getElementById('previewCvTab')?.addEventListener('click', () => this.switchPreviewTab('cv'));
@@ -438,6 +448,40 @@ class ATSTailor {
     });
     
     this.showToast('Workday credentials saved!', 'success');
+  }
+  
+  // Load default location settings
+  loadLocationSettings() {
+    const locationInput = document.getElementById('defaultLocationInput');
+    if (locationInput && this._defaultLocation) {
+      locationInput.value = this._defaultLocation;
+    }
+  }
+  
+  // Save default location for Remote jobs
+  saveDefaultLocation() {
+    const locationInput = document.getElementById('defaultLocationInput');
+    const location = locationInput?.value?.trim();
+    
+    if (!location) {
+      this.showToast('Please enter a valid location', 'error');
+      return;
+    }
+    
+    this._defaultLocation = location;
+    chrome.storage.local.set({ ats_defaultLocation: location });
+    
+    // Also update content script with new default location
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]?.id) {
+        chrome.tabs.sendMessage(tabs[0].id, {
+          action: 'UPDATE_DEFAULT_LOCATION',
+          defaultLocation: location
+        }).catch(() => {});
+      }
+    });
+    
+    this.showToast(`Default location set to: ${location}`, 'success');
   }
 
   async runWorkdayFlow() {

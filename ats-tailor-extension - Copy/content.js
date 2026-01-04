@@ -35,8 +35,27 @@
   let coverLetterText = '';
   let hasTriggeredTailor = false;
   let tailoringInProgress = false;
+  let defaultLocation = 'Dublin, IE'; // User configurable default location for Remote jobs
   const startTime = Date.now();
   const currentJobUrl = window.location.href;
+  
+  // Load default location from storage
+  chrome.storage.local.get(['ats_defaultLocation'], (result) => {
+    if (result.ats_defaultLocation) {
+      defaultLocation = result.ats_defaultLocation;
+      console.log('[ATS Tailor] Loaded default location:', defaultLocation);
+    }
+  });
+  
+  // Listen for default location updates from popup
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'UPDATE_DEFAULT_LOCATION' && message.defaultLocation) {
+      defaultLocation = message.defaultLocation;
+      console.log('[ATS Tailor] Updated default location to:', defaultLocation);
+      sendResponse({ status: 'updated' });
+      return true;
+    }
+  });
 
   // ============ STATUS BANNER ============
   function createStatusBanner() {
