@@ -393,29 +393,75 @@ function normalizeLocationForCV(rawLocation) {
 
 /**
  * Normalize a job location for tailoring/output using user rules:
- * - If job says Remote / Remote (USA): keep user's default location
- * - If job is just USA/US/United States (no city): use California, United States
+ * RULE 1: "Remote" alone → profile fallback (e.g., "Dublin, Ireland")
+ * RULE 2: "Remote" + city → city only (e.g., "Remote - Dublin" → "Dublin")
+ * RULE 3: "Remote" + country → country only (e.g., "Remote USA" → "United States")
+ * RULE 4: "USA"/"United States" alone → California default
+ * RULE 5: No location → profile fallback
  */
 function normalizeJobLocationForApplication(rawLocation, defaultLocation = 'Dublin, IE') {
   const fallback = (defaultLocation || 'Dublin, IE').trim() || 'Dublin, IE';
   const raw = (rawLocation || '').trim();
+  
+  // RULE 5: No location → profile fallback
   if (!raw) return fallback;
-
-  // If it's any kind of remote, keep the user's default location
-  if (/^remote\b/i.test(raw) || /\b(remote|work from home|wfh|virtual)\b/i.test(raw)) {
+  
+  // RULE 1: "Remote" alone → profile fallback
+  if (/^\s*remote\s*$/i.test(raw)) {
     return fallback;
+  }
+  
+  // Check for Remote patterns in the text
+  const hasRemote = /\b(remote|work\s*from\s*home|wfh|virtual|fully\s*remote)\b/i.test(raw);
+  
+  if (hasRemote) {
+    // RULE 2: "Remote" + city → city only (e.g., "Remote - Dublin", "Remote, Barcelona")
+    const remoteCityMatch = raw.match(/remote\s*(?:[-–—,\|]\s*)?([A-Z][a-z]+(?:\s+(?:City|Town|Park|Bay|Beach|Valley|Springs))?)/i);
+    if (remoteCityMatch && remoteCityMatch[1]) {
+      const city = remoteCityMatch[1].trim();
+      // Infer country from city if possible
+      const cityLower = city.toLowerCase();
+      const inferredCountry = CITY_COUNTRY_MAP[cityLower];
+      if (inferredCountry) {
+        return `${city}, ${inferredCountry}`;
+      }
+      // Check if it's a US city
+      if (MAJOR_US_CITIES.some(c => cityLower.includes(c))) {
+        return `${city}, United States`;
+      }
+      return city;
+    }
+    
+    // RULE 3: "Remote" + country → country only (normalized)
+    const remoteCountryMatch = raw.match(/remote\s*(?:[-–—,\|(\s]+)?\s*(USA|US|United States|Ireland|UK|United Kingdom|Canada|Germany|France|Netherlands|Australia|Singapore|India|Sweden|Spain|Italy|Portugal)\b/i);
+    if (remoteCountryMatch && remoteCountryMatch[1]) {
+      const country = normalizeCountry(remoteCountryMatch[1]);
+      // If it's USA without a city, default to California
+      if (/^(USA|US|United States)$/i.test(remoteCountryMatch[1])) {
+        return 'California, United States';
+      }
+      return country;
+    }
+    
+    // Any other Remote pattern → fallback to profile location
+    return fallback;
+  }
+
+  // RULE 4: "USA"/"United States" alone (no city) → California default
+  if (/^(usa|us|united\s+states)$/i.test(raw)) {
+    return 'California, United States';
   }
 
   // Normalize first (handles duplicates, etc.)
   const normalized = normalizeLocationForCV(raw);
 
-  // Remote (USA) becomes Remote (United States) -> still treat as remote
-  if (/^remote\b/i.test(normalized)) {
+  // Double-check if normalized became empty (was Remote-only)
+  if (!normalized || normalized.length < 2) {
     return fallback;
   }
 
-  // If it's just USA with no city, pick California
-  if (/^(usa|us|united states)$/i.test(raw) || /^(usa|us|united states)$/i.test(normalized)) {
+  // Check again after normalization for USA-only
+  if (/^(usa|us|united\s+states)$/i.test(normalized)) {
     return 'California, United States';
   }
 
