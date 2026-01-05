@@ -1,19 +1,19 @@
-// turbo-pipeline.js - LAZYAPPLY BLAZING Pipeline (≤6ms total)
-// 70% FASTER THAN ALL: Ultimate speed for LazyApply instant compatibility
-// FEATURES: URL-based caching, parallel processing, High Priority keyword distribution, Unique CV per job
-// INTEGRATED: OpenResume-style ATS PDF + Cover Letter generation
+// turbo-pipeline.js - ULTRA-FAST 50ms LOCAL PIPELINE v2.0
+// NO API CALLS - 100% Local Processing for instant LazyApply compatibility
+// FEATURES: URL-based caching, parallel processing, instant keyword extraction
+// TARGET: 50ms total (10ms extract + 25ms tailor + 15ms PDF)
 
 (function(global) {
   'use strict';
 
-  // ============ TIMING TARGETS (6ms TOTAL - BLAZING FAST) ============
+  // ============ TIMING TARGETS (50ms TOTAL - ULTRA-FAST) ============
   const TIMING_TARGETS = {
-    EXTRACT_KEYWORDS: 1,      // 1ms (cached: instant)
-    TAILOR_CV: 1,             // 1ms
-    GENERATE_PDF: 2,          // 2ms
-    GENERATE_COVER: 1,        // 1ms for cover letter
-    ATTACH_FILES: 1,          // 1ms
-    TOTAL: 6                  // 6ms total
+    EXTRACT_KEYWORDS: 10,     // 10ms (cached: instant 0ms)
+    TAILOR_CV: 25,            // 25ms
+    GENERATE_PDF: 15,         // 15ms (pre-cached)
+    GENERATE_COVER: 10,       // 10ms for cover letter
+    ATTACH_FILES: 5,          // 5ms
+    TOTAL: 50                 // 50ms total target
   };
 
   // ============ FAST KEYWORD CACHE (URL-BASED) ============
