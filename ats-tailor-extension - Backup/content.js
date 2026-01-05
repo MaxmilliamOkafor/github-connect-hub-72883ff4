@@ -122,8 +122,9 @@
     }
   });
 
-  // ============ STATUS BANNER WITH PROGRESS STEPS ============
-  let currentStep = 0; // 0=detecting, 1=tailoring, 2=attaching, 3=done
+  // ============ STATUS BANNER - SINGLE ATOMIC STEP WITH LIVE TIMER ============
+  let timerInterval = null;
+  let pipelineStartTime = null;
   
   function createStatusBanner() {
     if (document.getElementById('ats-auto-banner')) return;
@@ -139,7 +140,7 @@
           right: 0 !important;
           z-index: 999999 !important;
           background: linear-gradient(135deg, #ff6b35 0%, #ff8c42 100%) !important;
-          padding: 10px 20px !important;
+          padding: 12px 20px !important;
           font: bold 13px system-ui, sans-serif !important;
           color: #000 !important;
           text-align: center !important;
@@ -152,113 +153,95 @@
           opacity: 1 !important;
           pointer-events: auto !important;
         }
-        #ats-auto-banner .ats-logo { font-size: 16px; font-weight: 800; }
-        #ats-auto-banner .ats-steps {
+        #ats-auto-banner .ats-logo { font-size: 18px; font-weight: 800; }
+        #ats-auto-banner .ats-timer-box {
           display: flex;
           align-items: center;
-          gap: 6px;
-          background: rgba(0,0,0,0.1);
-          padding: 6px 12px;
-          border-radius: 20px;
+          gap: 8px;
+          background: rgba(0,0,0,0.15);
+          padding: 8px 16px;
+          border-radius: 24px;
+          font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
         }
-        #ats-auto-banner .ats-step {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          padding: 3px 8px;
-          border-radius: 12px;
-          font-size: 11px;
+        #ats-auto-banner .ats-timer {
+          font-size: 20px;
+          font-weight: 800;
+          min-width: 55px;
+          text-align: right;
+        }
+        #ats-auto-banner .ats-timer-unit {
+          font-size: 12px;
           font-weight: 600;
-          opacity: 0.5;
-          transition: all 0.3s ease;
+          opacity: 0.8;
         }
-        #ats-auto-banner .ats-step.active {
-          opacity: 1;
-          background: rgba(255,255,255,0.3);
-          animation: ats-step-pulse 1s ease-in-out infinite;
-        }
-        #ats-auto-banner .ats-step.done {
-          opacity: 1;
-          background: rgba(0,200,100,0.4);
-        }
-        #ats-auto-banner .ats-step-icon {
-          width: 16px;
-          height: 16px;
+        #ats-auto-banner .ats-spinner {
+          width: 18px;
+          height: 18px;
+          border: 2px solid rgba(0,0,0,0.2);
+          border-top-color: #000;
           border-radius: 50%;
-          background: rgba(0,0,0,0.2);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 10px;
+          animation: ats-spin 0.6s linear infinite;
         }
-        #ats-auto-banner .ats-step.done .ats-step-icon {
-          background: rgba(0,200,100,0.6);
+        #ats-auto-banner .ats-check {
+          font-size: 20px;
+          display: none;
         }
-        #ats-auto-banner .ats-step.active .ats-step-icon {
-          animation: ats-icon-spin 1s linear infinite;
-        }
-        #ats-auto-banner .ats-step-divider {
-          width: 16px;
-          height: 2px;
-          background: rgba(0,0,0,0.2);
-          border-radius: 1px;
-        }
-        #ats-auto-banner .ats-step.done + .ats-step-divider {
-          background: rgba(0,200,100,0.5);
-        }
-        @keyframes ats-step-pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.05); }
-        }
-        @keyframes ats-icon-spin {
-          from { transform: rotate(0deg); }
+        @keyframes ats-spin {
           to { transform: rotate(360deg); }
         }
         #ats-auto-banner .ats-status {
-          font-size: 12px;
-          max-width: 300px;
+          font-size: 13px;
+          font-weight: 600;
+          max-width: 350px;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
-        #ats-auto-banner.success { background: linear-gradient(135deg, #00ff88 0%, #00cc66 100%) !important; }
-        #ats-auto-banner.error { background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%) !important; color: #fff !important; }
+        #ats-auto-banner.success { 
+          background: linear-gradient(135deg, #00ff88 0%, #00cc66 100%) !important; 
+        }
+        #ats-auto-banner.success .ats-spinner { display: none; }
+        #ats-auto-banner.success .ats-check { display: block; }
+        #ats-auto-banner.error { 
+          background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%) !important; 
+          color: #fff !important; 
+        }
+        #ats-auto-banner.error .ats-spinner { display: none; }
       </style>
       <span class="ats-logo">⚡ ATS TURBO</span>
-      <div class="ats-steps">
-        <div class="ats-step active" data-step="0">
-          <span class="ats-step-icon">⟳</span>
-          <span>10ms</span>
-        </div>
-        <div class="ats-step-divider"></div>
-        <div class="ats-step" data-step="1">
-          <span class="ats-step-icon">✎</span>
-          <span>25ms</span>
-        </div>
-        <div class="ats-step-divider"></div>
-        <div class="ats-step" data-step="2">
-          <span class="ats-step-icon">📎</span>
-          <span>15ms</span>
-        </div>
+      <div class="ats-timer-box">
+        <div class="ats-spinner"></div>
+        <span class="ats-check">✓</span>
+        <span class="ats-timer" id="ats-live-timer">0</span>
+        <span class="ats-timer-unit">ms</span>
       </div>
-      <span class="ats-status" id="ats-banner-status">⚡ TURBO: Starting...</span>
+      <span class="ats-status" id="ats-banner-status">🚀 Starting...</span>
     `;
     document.body.appendChild(banner);
     document.body.classList.add('ats-banner-active');
   }
 
-  function updateBannerStep(step) {
-    currentStep = step;
-    const steps = document.querySelectorAll('#ats-auto-banner .ats-step');
-    steps.forEach((el, idx) => {
-      el.classList.remove('active', 'done');
-      if (idx < step) {
-        el.classList.add('done');
-        el.querySelector('.ats-step-icon').textContent = '✓';
-      } else if (idx === step) {
-        el.classList.add('active');
-      }
-    });
+  function startLiveTimer() {
+    pipelineStartTime = performance.now();
+    const timerEl = document.getElementById('ats-live-timer');
+    if (!timerEl) return;
+    
+    // Update every 5ms for smooth counting
+    timerInterval = setInterval(() => {
+      const elapsed = Math.round(performance.now() - pipelineStartTime);
+      timerEl.textContent = elapsed;
+    }, 5);
+  }
+
+  function stopLiveTimer(finalTime) {
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+    const timerEl = document.getElementById('ats-live-timer');
+    if (timerEl && finalTime !== undefined) {
+      timerEl.textContent = Math.round(finalTime);
+    }
   }
 
   function updateBanner(status, type = 'working') {
@@ -268,12 +251,6 @@
       banner.className = type === 'success' ? 'success' : type === 'error' ? 'error' : '';
     }
     if (statusEl) statusEl.textContent = status;
-    
-    // Auto-detect step from status message
-    if (status.toLowerCase().includes('detect')) updateBannerStep(0);
-    else if (status.toLowerCase().includes('tailor') || status.toLowerCase().includes('generat')) updateBannerStep(1);
-    else if (status.toLowerCase().includes('attach') || status.toLowerCase().includes('load')) updateBannerStep(2);
-    else if (type === 'success') updateBannerStep(3);
   }
 
   function hideBanner() {
@@ -662,7 +639,7 @@
     return { title, company, location, description, url: window.location.href, platform: platformKey || hostname };
   }
 
-  // ============ AUTO-TAILOR DOCUMENTS (ULTRA-FAST 50ms LOCAL PIPELINE) ============
+  // ============ AUTO-TAILOR DOCUMENTS (SINGLE ATOMIC 50ms PIPELINE) ============
   async function autoTailorDocuments() {
     if (hasTriggeredTailor || tailoringInProgress) {
       console.log('[ATS Tailor] Already triggered or in progress, skipping');
@@ -682,6 +659,7 @@
     // INSTANT: If we have cached PDFs for this URL, use them immediately
     if (cached.urls[currentJobUrl] && cached.pdfs[currentJobUrl]) {
       console.log('[ATS Tailor] ⚡ INSTANT CACHE HIT - loading cached files');
+      createStatusBanner();
       const cachedData = cached.pdfs[currentJobUrl];
       await new Promise(resolve => {
         chrome.storage.local.set({
@@ -693,16 +671,17 @@
         }, resolve);
       });
       loadFilesAndStart();
-      updateBanner(`⚡ Cached! Match: ${cachedData.matchScore || 95}%`, 'success');
+      updateBanner(`⚡ CACHED! ${cachedData.matchScore || 95}% match`, 'success');
       return;
     }
 
     hasTriggeredTailor = true;
     tailoringInProgress = true;
-    const pipelineStart = performance.now();
     
+    // Create banner and start live timer IMMEDIATELY
     createStatusBanner();
-    updateBanner('⚡ TURBO: Extracting keywords...', 'working');
+    startLiveTimer();
+    updateBanner('🚀 Tailoring...', 'working');
 
     try {
       // PARALLEL: Get session + profile from cache simultaneously
@@ -749,9 +728,8 @@
       }
 
       console.log('[ATS Tailor] ⚡ Job detected:', jobInfo.title);
-      updateBanner(`⚡ Tailoring: ${jobInfo.title.substring(0, 30)}...`, 'working');
 
-      // ============ ULTRA-FAST LOCAL PIPELINE (≤50ms) ============
+      // ============ SINGLE ATOMIC 50ms PIPELINE - ALL IN ONE ============
       // Build base CV text from profile
       const baseCV = buildBaseCVFromProfile(p);
       
@@ -808,11 +786,12 @@
         throw new Error('TurboPipeline not available');
       }
 
-      const pipelineTime = performance.now() - pipelineStart;
+      const pipelineTime = performance.now() - pipelineStartTime;
+      stopLiveTimer(pipelineTime);
       console.log(`[ATS Tailor] ⚡ COMPLETE in ${pipelineTime.toFixed(0)}ms (target: 50ms)`);
 
       const matchScore = result.matchScore || 95;
-      updateBanner(`✅ ${pipelineTime.toFixed(0)}ms! Match: ${matchScore}%`, 'success');
+      updateBanner(`✅ ${matchScore}% match • Attached!`, 'success');
 
       // Store PDFs in chrome.storage for the attach loop
       const fallbackName = `${(p.first_name || '').trim()}_${(p.last_name || '').trim()}`.replace(/\s+/g, '_') || 'Applicant';
@@ -857,12 +836,11 @@
       });
       // Now load files and start attaching
       loadFilesAndStart();
-      
-      updateBanner(`✅ ${pipelineTime.toFixed(0)}ms! Match: ${matchScore}% - Attached!`, 'success');
       hideBanner();
 
     } catch (error) {
       console.error('[ATS Tailor] Auto-tailor error:', error);
+      stopLiveTimer();
       
       let errorMsg = error.message || 'Unknown error';
       if (errorMsg.includes('TurboPipeline not available')) {
@@ -873,7 +851,7 @@
         errorMsg = 'Profile not found - complete profile first';
       }
       
-      updateBanner(`Error: ${errorMsg}`, 'error');
+      updateBanner(`❌ ${errorMsg}`, 'error');
     } finally {
       tailoringInProgress = false;
     }
