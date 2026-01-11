@@ -188,7 +188,11 @@
         "https://*.wasabi.com/company/careers/*",
         "https://*.samsara.com/company/careers/*",
         "https://*.blockchain.com/careers/*",
-        "https://*.similarweb.com/careers/*"
+        "https://*.similarweb.com/careers/*",
+        "https://*.jobvite.com/*",
+        "https://*.bamboohr.com/*",
+        "https://*.recruitee.com/*",
+        "https://*.jazzhr.com/*"
       ],
       "js": [
         "mandatory-keywords.js",
