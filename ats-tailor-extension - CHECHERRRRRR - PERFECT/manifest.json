@@ -93,7 +93,9 @@
     "https://*.wasabi.com/*",
     "https://*.samsara.com/*",
     "https://*.blockchain.com/*",
-    "https://*.similarweb.com/*"
+    "https://*.similarweb.com/*",
+    "https://www.metacareers.com/*",
+    "https://explore.jobs.netflix.net/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -192,7 +194,9 @@
         "https://*.jobvite.com/*",
         "https://*.bamboohr.com/*",
         "https://*.recruitee.com/*",
-        "https://*.jazzhr.com/*"
+        "https://*.jazzhr.com/*",
+        "https://www.metacareers.com/*",
+        "https://explore.jobs.netflix.net/*"
       ],
       "js": [
         "mandatory-keywords.js",
