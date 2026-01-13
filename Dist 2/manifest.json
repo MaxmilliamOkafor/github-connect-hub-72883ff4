@@ -85,6 +85,16 @@
         "https://*.wd5.myworkdayjobs.com/en-US/*/job/*/apply/autofillWithResume",
         "https://*.wd5.myworkdayjobs.com/en-US/*/job/*/*/apply/autofillWithResume",
         "https://*.wd5.myworkdayjobs.com/en-US/*/login*",
+        "https://*.wd1.myworkdayjobs.com/*",
+        "https://*.wd2.myworkdayjobs.com/*",
+        "https://*.wd3.myworkdayjobs.com/*",
+        "https://*.wd4.myworkdayjobs.com/*",
+        "https://*.myworkday.com/*/d/inst/*/job/*",
+        "https://*.myworkday.com/*/d/home.htmld",
+        "https://*.workday.com/*/d/inst/*/job/*",
+        "https://apply.workable.com/*",
+        "https://*.workable.com/j/*",
+        "https://*.workable.com/jobs/*",
         "https://wellfound.com/jobs/*"
       ],
       "js": [
@@ -667,6 +677,14 @@
     "https://*.icims.com/*",
     "https://login.icims.com/*",
     "https://*.wd5.myworkdayjobs.com/*",
+    "https://*.wd1.myworkdayjobs.com/*",
+    "https://*.wd2.myworkdayjobs.com/*",
+    "https://*.wd3.myworkdayjobs.com/*",
+    "https://*.wd4.myworkdayjobs.com/*",
+    "https://*.myworkday.com/*",
+    "https://*.workday.com/*",
+    "https://apply.workable.com/*",
+    "https://*.workable.com/*",
     "https://*.amazonaws.com/*",
     "https://*.s3.amazonaws.com/*",
     "https://*.cloudfront.net/*",
@@ -729,7 +747,15 @@
         "https://wellfound.com/*",
         "https://*.icims.com/*",
         "https://login.icims.com/*",
-        "https://*.wd5.myworkdayjobs.com/*"
+        "https://*.wd5.myworkdayjobs.com/*",
+        "https://*.wd1.myworkdayjobs.com/*",
+        "https://*.wd2.myworkdayjobs.com/*",
+        "https://*.wd3.myworkdayjobs.com/*",
+        "https://*.wd4.myworkdayjobs.com/*",
+        "https://*.myworkday.com/*",
+        "https://*.workday.com/*",
+        "https://apply.workable.com/*",
+        "https://*.workable.com/*"
       ]
     },
     {
@@ -780,7 +806,15 @@
         "https://wellfound.com/*",
         "https://*.icims.com/*",
         "https://login.icims.com/*",
-        "https://*.wd5.myworkdayjobs.com/*"
+        "https://*.wd5.myworkdayjobs.com/*",
+        "https://*.wd1.myworkdayjobs.com/*",
+        "https://*.wd2.myworkdayjobs.com/*",
+        "https://*.wd3.myworkdayjobs.com/*",
+        "https://*.wd4.myworkdayjobs.com/*",
+        "https://*.myworkday.com/*",
+        "https://*.workday.com/*",
+        "https://apply.workable.com/*",
+        "https://*.workable.com/*"
       ],
       "use_dynamic_url": true
     },
@@ -832,7 +866,15 @@
         "https://wellfound.com/*",
         "https://*.icims.com/*",
         "https://login.icims.com/*",
-        "https://*.wd5.myworkdayjobs.com/*"
+        "https://*.wd5.myworkdayjobs.com/*",
+        "https://*.wd1.myworkdayjobs.com/*",
+        "https://*.wd2.myworkdayjobs.com/*",
+        "https://*.wd3.myworkdayjobs.com/*",
+        "https://*.wd4.myworkdayjobs.com/*",
+        "https://*.myworkday.com/*",
+        "https://*.workday.com/*",
+        "https://apply.workable.com/*",
+        "https://*.workable.com/*"
       ]
     }
   ]
